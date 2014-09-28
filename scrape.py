@@ -19,9 +19,15 @@ def init_selenium():
 
 
 def chunk(l, n):
-    """Yields successive n sized chunks from l."""
-    for i in xrange(0, len(l), n):
-        yield l[i:i+n]
+    """Divides a list l into n roughly equally sized parts."""
+    avg = len(l) / float(n)
+    result = []
+    last = 0.0
+    while last < len(l):
+        result.append(l[int(last):int(last + avg)])
+        last += avg
+    return result
+
 
 
 def worker(scrapers):
@@ -70,11 +76,10 @@ def main(num_threads, limit=None):
 
     jobs = []
     scrapers = scrapers[:limit]
-    divisor = (len(scrapers) / num_threads) + 1
 
     # Let's start scraping!
     # This loop will run num_threads times
-    for scraper_set in chunk(scrapers, divisor):
+    for scraper_set in chunk(scrapers, num_threads):
         t = threading.Thread(target=worker, args=(scraper_set,))
         t.start()
         jobs.append(t)
