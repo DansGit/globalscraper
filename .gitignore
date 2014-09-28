@@ -1,0 +1,10 @@
+*.pyc
+*.zip
+*~
+*.swp
+*.swo
+*.swn
+*.jar
+config.py
+globalscraper.log
+globalscraper.db
