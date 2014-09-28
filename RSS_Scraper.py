@@ -23,16 +23,19 @@ class RSS_Scraper(object):
         _initdb(dbpath, self.publication)
 
 
-    def scrape(self, wait=10):
+    def scrape(self, wait=10, limit=20):
         """Scrapes each new webpage in rss feed."""
         start_time = clock()
         try:
             conn = sqlite3.connect(self.dbpath)
             newest_date = _most_recent_date(conn, self.publication)
-            browser = _init_webdriver()
             self.logger.info("Scraping rss feed: {}".format(self.rss))
             feed = feedparser.parse(self.rss)
             items = feed['items']
+            browser = None
+
+            # Cut items to limit newest.
+            items = items[:limit]
 
             # Sort feed items ascending.
             items.sort(key=lambda x: x['published_parsed'])
@@ -41,7 +44,10 @@ class RSS_Scraper(object):
                 url = item['link']
                 item_date = strftime('%Y-%m-%d %T', item['published_parsed'])
                 # Make sure we aren't getting old news
-                if item_date > newest_date and item_date > strftime('%Y-%m-%d 00:00:00'):
+                if item_date > newest_date:
+                    if browser is None:
+                        browser = _init_webdriver()
+
                     # Load webpage
                     self.logger.info('Getting "{}" from "{}"'.format(url,
                         self.publication))
@@ -139,19 +145,23 @@ def _save_article(conn, content, pub_date, headline, publication):
 
 def _init_webdriver():
     # get the Firefox profile object
-    firefoxProfile = FirefoxProfile()
+    fp = FirefoxProfile()
 
     # Disable CSS
-    firefoxProfile.set_preference('permissions.default.stylesheet', 2)
+    fp.set_preference('permissions.default.stylesheet', 2)
 
     # Disable images
-    firefoxProfile.set_preference('permissions.default.image', 2)
+    fp.set_preference('permissions.default.image', 2)
 
     # Disable Flash
-    firefoxProfile.set_preference('dom.ipc.plugins.enabled.libflashplayer.so',
+    fp.set_preference('dom.ipc.plugins.enabled.libflashplayer.so',
                                'false')
+
+    # Install ad block plus
+    fp.add_extension("adblock_plus-2.6.4-fx+an+sm+tb.xpi")
+
     # Set the modified profile while creating the browser object
-    return webdriver.Firefox(firefoxProfile)
+    return webdriver.Firefox(fp)
 
 
 class ParseError(Exception):

@@ -5,6 +5,7 @@
 *.swo
 *.swn
 *.jar
+*.xpi
 config.py
 globalscraper.log
 globalscraper.db
