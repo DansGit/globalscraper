@@ -70,7 +70,7 @@ def main(num_threads, limit=None):
 
     jobs = []
     scrapers = scrapers[:limit]
-    divisor = len(scrapers) / num_threads
+    divisor = (len(scrapers) / num_threads) + 1
 
     # Let's start scraping!
     # This loop will run num_threads times
