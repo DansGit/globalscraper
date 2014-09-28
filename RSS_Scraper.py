@@ -79,7 +79,8 @@ class RSS_Scraper(object):
             self.errors += 1
         finally:
             conn.close()
-            browser.close()
+            if browser is not None:
+                browser.close()
             self.elapsed_time = clock() - start_time
 
     def _extract_article(self, html):
