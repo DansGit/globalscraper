@@ -8,3 +8,4 @@
 config.py
 globalscraper.log
 globalscraper.db
+venv
