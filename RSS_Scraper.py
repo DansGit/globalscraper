@@ -159,7 +159,7 @@ def _init_webdriver():
                                'false')
 
     # Install ad block plus
-    fp.add_extension("adblock_plus-2.6.4-fx+an+sm+tb.xpi")
+    fp.add_extension("adblockplusfirefox.xpi")
 
     # Set the modified profile while creating the browser object
     return webdriver.Firefox(fp)
