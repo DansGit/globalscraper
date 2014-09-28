@@ -158,6 +158,9 @@ def _init_webdriver():
     fp.set_preference('dom.ipc.plugins.enabled.libflashplayer.so',
                                'false')
 
+    # Block Pop ups
+    fp.set_preference('browser.popups.showPopupBlocker', 'true')
+
     # Install ad block plus
     fp.add_extension("adblockplusfirefox.xpi")
 
