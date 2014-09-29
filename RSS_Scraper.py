@@ -59,8 +59,6 @@ class RSS_Scraper(object):
                 browser.close()
                 pbar.tick()
         conn.close()
-        if browser is not None:
-            browser.close()
 
 
     def rss_parse(self, limit=20):
