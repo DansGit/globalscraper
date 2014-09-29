@@ -3,3 +3,4 @@
 #to GitHub.
 email = ""
 password = ""
+dbpath = "articles.db"

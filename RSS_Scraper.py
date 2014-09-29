@@ -6,25 +6,23 @@ from goose import Goose
 from time import sleep, strftime
 import sqlite3
 import logging
+import config
 
 class RSS_Scraper(object):
-    def __init__(self, rss, dbpath, publication):
+    def __init__(self, rss, publication):
         # Initialize some attributes
-        self.dbpath = dbpath
         self.rss = rss
         self.publication = publication.replace(' ', '_')
         self.logger = logging.getLogger(__name__)
         self.errors = 0
         self.jobs = []
 
-        # Start up the database
-        _initdb(self.dbpath, self.publication)
 
 
     def scrape(self, pbar, wait=10):
         """Scrapes each new webpage in rss feed."""
         self.logger.info("Scraping rss feed: {}".format(self.rss))
-        conn = sqlite3.connect(self.dbpath)
+        conn = sqlite3.connect(config.dbpath)
 
 
         for entry in self.jobs:
@@ -40,9 +38,10 @@ class RSS_Scraper(object):
                         '"{}" from "{}"'.format(url, self.publication))
                 content = _extract_article(html)
 
-                # If that doesn't work, try using a browser
+                #If that doesn't work, try using a browser
+                #so that AJAX events run.
                 if content is False:
-                    self.logger.info('Using browser to download ' + \
+                    self.logger.warning('Using browser to download ' + \
                             '"{}" from "{}"'.format(url, self.publication))
                     html = _browser_download(url, wait)
                     content = _extract_article(html)
@@ -75,7 +74,7 @@ class RSS_Scraper(object):
 
 
     def rss_parse(self, limit=20):
-        conn = sqlite3.connect(self.dbpath)
+        conn = sqlite3.connect(config.dbpath)
         newest_date = _most_recent_date(conn, self.publication)
         feed = feedparser.parse(self.rss)
 
@@ -138,30 +137,18 @@ def _requests_download(url):
     response = requests.get(url)
     return response.text
 
-def _initdb(dbpath, publication):
-    conn = sqlite3.connect(dbpath)
-    query = """CREATE TABLE IF NOT EXISTS {table}
-    (
-        content TEXT,
-        pub_date TEXT,
-        headline VARCHAR(250)
-    );
-    """.format(table=publication)
-    conn.execute(query)
-    conn.commit()
-    conn.close()
-
-
 def _most_recent_date(conn, publication):
     """Returns the the most recent date in the pub_date column of an sqlite3
     database.
     """
-    query = """SELECT pub_date FROM {table}
+    query = """SELECT pub_date FROM articles
+               WHERE publication=?
                ORDER BY pub_date DESC
                LIMIT 1
-               """.format(table=publication)
+               """
 
-    result = conn.execute(query).fetchone()
+    params = (publication,)
+    result = conn.execute(query, params).fetchone()
     if result:
         return result[0].strip("'")
     else:
@@ -171,17 +158,10 @@ def _most_recent_date(conn, publication):
 def _save_article(conn, content, pub_date, headline, publication):
     """Saves article to database."""
     query = """INSERT INTO {table}
-    (content, pub_date, headline)
-    VALUES (?, ?, ?);
+    (content, pub_date, headline, publication)
+    VALUES (?, ?, ?, ?);
     """.format(table=publication)
-    params = (content, pub_date, headline)
-    """
-    params = {
-            'content': content,
-            'pub_date': repr(pub_date),
-            'headline': headline
-            }
-    """
+    params = (content, pub_date, headline, publication)
     conn.execute(query, params)
     conn.commit()
 

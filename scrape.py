@@ -11,6 +11,9 @@ from pyvirtualdisplay import Display
 from tempfile import TemporaryFile
 from subprocess import Popen
 from progressbar import ProgressBar
+import sqlite3
+
+DBPATH = "articles.db"
 
 def init_selenium():
     p = Popen(['java', '-jar', 'selenium-server-standalone-2.43.1.jar'],
@@ -55,13 +58,30 @@ def format_time(seconds):
     return str(datetime.timedelta(seconds=seconds))
 
 
+def initdb(dbpath):
+    conn = sqlite3.connect(dbpath)
+    query = """CREATE TABLE IF NOT EXISTS articles
+    (
+        content TEXT,
+        pub_date VARCHAR(100),
+        headline VARCHAR(250),
+        publication VARCHAR(100)
+    );
+    """
+    conn.execute(query)
+    conn.commit()
+    conn.close()
+
+
 def main(num_threads, limit=None):
+    # Make sure we have a DB with the correct table.
+    initdb(config.dbpath)
     start_time = clock()
     display = Display(visible=0, size=(800, 600))
     display.start()
     logging.basicConfig(filename='globalscraper.log',
             filemode='w',
-            level=logging.INFO)
+            level=logging.WARNING)
 
     scrapers = []
     with open('whitelist_urls.csv') as csvfile:
@@ -73,8 +93,7 @@ def main(num_threads, limit=None):
         for row in whitelist_urls:
             scraper = RSS_Scraper(
                     rss=row['url'],
-                    dbpath='globalscraper.db',
-                    publication=row['name'],
+                    publication=row['name']
                     )
             scrapers.append(scraper)
 
