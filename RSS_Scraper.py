@@ -1,6 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.firefox.firefox_profile import FirefoxProfile
-
+import requests
 import feedparser
 from goose import Goose
 from time import sleep, strftime
@@ -30,17 +30,31 @@ class RSS_Scraper(object):
         for entry in self.jobs:
             url = entry['url']
             try:
-                browser = _init_webdriver()
-                # Load webpage
+                # Download webpage with requests
                 self.logger.info('Getting "{}" from "{}"'.format(url,
                     self.publication))
-                browser.get(url)
-                sleep(wait) # Wait for the page to load
+                html = _requests_download(url)
 
-                # Extract Content
+                # Try extracting content
                 self.logger.info('Extracting content of ' + \
                         '"{}" from "{}"'.format(url, self.publication))
-                content = self._extract_article(browser.page_source)
+                content = _extract_article(html)
+
+                # If that doesn't work, try using a browser
+                if content is False:
+                    self.logger.info('Using browser to download ' + \
+                            '"{}" from "{}"'.format(url, self.publication))
+                    html = _browser_download(url, wait)
+                    content = _extract_article(html)
+                else:
+                    #Throttle the program, so we don't hit the servers
+                    #too hard.
+                    sleep(wait)
+
+                # If that STILL doesn't work, raise a parse error
+                if content is False:
+                    raise ParseError('Unable to extract content from ' + \
+                            '"{}" in "{}"'.format(url, self.publication))
 
                 # Save results
                 self.logger.info('Saving results of "{}" from "{}"'.format(
@@ -56,7 +70,6 @@ class RSS_Scraper(object):
                         exc_info=True)
                 self.errors += 1
             finally:
-                browser.close()
                 pbar.tick()
         conn.close()
 
@@ -99,17 +112,31 @@ class RSS_Scraper(object):
 
 
 
-    def _extract_article(self, html):
-        """Removes html boilerplate and extracts article content from html."""
-        g = Goose()
-        article = g.extract(raw_html=html)
-        cleaned = article.cleaned_text
-        if cleaned == '':
-            raise ParseError(msg='Unable to extract page in ' + \
-                    '"{}"'.format(self.publication))
+def _extract_article(html):
+    """Removes html boilerplate and extracts article content from html."""
+    g = Goose()
+    article = g.extract(raw_html=html)
+    cleaned = article.cleaned_text
+    if cleaned == '':
+        return False
 
-        return cleaned
+    return cleaned
 
+def _browser_download(url, wait):
+    try:
+        browser = _init_webdriver()
+        browser.get(url)
+        sleep(wait) # Wait for page to load.
+        html = browser.page_source
+    finally:
+        browser.close()
+
+    return html
+
+
+def _requests_download(url):
+    response = requests.get(url)
+    return response.text
 
 def _initdb(dbpath, publication):
     conn = sqlite3.connect(dbpath)
