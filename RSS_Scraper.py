@@ -24,13 +24,13 @@ class RSS_Scraper(object):
     def scrape(self, pbar, wait=10):
         """Scrapes each new webpage in rss feed."""
         self.logger.info("Scraping rss feed: {}".format(self.rss))
-        browser = _init_webdriver()
         conn = sqlite3.connect(self.dbpath)
 
 
         for entry in self.jobs:
             url = entry['url']
             try:
+                browser = _init_webdriver()
                 # Load webpage
                 self.logger.info('Getting "{}" from "{}"'.format(url,
                     self.publication))
@@ -56,6 +56,7 @@ class RSS_Scraper(object):
                         exc_info=True)
                 self.errors += 1
             finally:
+                browser.close()
                 pbar.tick()
         conn.close()
         if browser is not None:
@@ -178,7 +179,7 @@ def _init_webdriver():
     fp.set_preference('browser.popups.showPopupBlocker', 'true')
 
     # Install ad block plus
-    # fp.add_extension("adblockplusfirefox.xpi")
+    fp.add_extension("adblockplusfirefox.xpi")
 
     # Set the modified profile while creating the browser object
     return webdriver.Firefox(fp)
