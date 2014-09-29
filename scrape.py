@@ -91,6 +91,7 @@ def main(num_threads, limit=None):
     jobs = []
     scrapers = scrapers[:limit]
     num_articles = sum([len(x.jobs) for x in scrapers])
+    print "Scraping articles..."
     pbar2 = ProgressBar(num_articles)
     pbar2.start()
 
