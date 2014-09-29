@@ -6,7 +6,6 @@ from goose import Goose
 from time import sleep, strftime
 import sqlite3
 import logging
-from time import clock
 
 class RSS_Scraper(object):
     def __init__(self, rss, dbpath, publication):
@@ -16,76 +15,93 @@ class RSS_Scraper(object):
         self.publication = publication.replace(' ', '_')
         self.logger = logging.getLogger(__name__)
         self.errors = 0
-        self.total = 0
-        self.elapsed_time = None
+        self.jobs = []
 
         # Start up the database
-        _initdb(dbpath, self.publication)
+        _initdb(self.dbpath, self.publication)
 
 
-    def scrape(self, wait=10, limit=20):
+    def scrape(self, pbar, wait=10):
         """Scrapes each new webpage in rss feed."""
-        start_time = clock()
+        self.logger.info("Scraping rss feed: {}".format(self.rss))
+        browser = _init_webdriver()
+        conn = sqlite3.connect(self.dbpath)
+
+
+        for entry in self.jobs:
+            url = entry['url']
+            try:
+                # Load webpage
+                self.logger.info('Getting "{}" from "{}"'.format(url,
+                    self.publication))
+                browser.get(url)
+                sleep(wait) # Wait for the page to load
+
+                # Extract Content
+                self.logger.info('Extracting content of ' + \
+                        '"{}" from "{}"'.format(url, self.publication))
+                content = self._extract_article(browser.page_source)
+
+                # Save results
+                self.logger.info('Saving results of "{}" from "{}"'.format(
+                    url, self.publication))
+                _save_article(conn, content, entry['pub_date'], entry['title'],
+                        self.publication)
+            except ParseError as e:
+                self.logger.error(str(e))
+                self.errors += 1
+            except Exception as e:
+                self.logger.error('Error occured while ' + \
+                        'scraping "{}"'.format(self.publication),
+                        exc_info=True)
+                self.errors += 1
+            finally:
+                pbar.tick()
+        conn.close()
+        if browser is not None:
+            browser.close()
+
+
+    def rss_parse(self, limit=20):
+        conn = sqlite3.connect(self.dbpath)
+        newest_date = _most_recent_date(conn, self.publication)
+        feed = feedparser.parse(self.rss)
+
+        # Cut items to limit newest.
+        items = feed['items'][:limit]
+
+        # Sort feed items ascending.
         try:
-            conn = sqlite3.connect(self.dbpath)
-            newest_date = _most_recent_date(conn, self.publication)
-            self.logger.info("Scraping rss feed: {}".format(self.rss))
-            feed = feedparser.parse(self.rss)
-            items = feed['items']
-            browser = None
-
-            # Cut items to limit newest.
-            items = items[:limit]
-
-            # Sort feed items ascending.
             items.sort(key=lambda x: x['published_parsed'])
+        except KeyError:
+            return False
 
-            for item in items:
-                url = item['link']
+        # Add feed URLs to a list attribute
+        for item in items:
+            try:
                 item_date = strftime('%Y-%m-%d %T', item['published_parsed'])
-                # Make sure we aren't getting old news
+                # Make sure we aren't getting old news.
                 if item_date > newest_date:
-                    if browser is None:
-                        browser = _init_webdriver()
+                    entry = {
+                            'url': item['link'],
+                            'pub_date': item_date,
+                            'title': item['title']
+                            }
 
-                    # Load webpage
-                    self.logger.info('Getting "{}" from "{}"'.format(url,
-                        self.publication))
-                    browser.get(url)
-                    sleep(wait) # Wait for the page to load
+                    self.jobs.append(entry)
+            except TypeError:
+                logging.warning('Unable to parse date in "{}"'.format(
+                    self.publication))
 
-                    # Extract Content
-                    self.logger.info('Extracting content of ' + \
-                            '"{}" from "{}"'.format(url, self.publication))
-                    content = self._extract_article(browser.page_source)
+        if self.jobs == []:
+            return False
+        else:
+            return True
 
-                    # Save results
-                    self.logger.info('Saving results of "{}" from "{}"'.format(
-                        url, self.publication))
-                    _save_article(conn, content, item_date, item['title'],
-                            self.publication)
 
-                    # Count success
-                    self.total += 1
-
-        except ParseError as e:
-            self.logger.error(str(e))
-            self.errors += 1
-
-        except Exception as e:
-            self.logger.error('Error occured while ' + \
-                    'scraping "{}"'.format(self.publication),
-                    exc_info=True)
-            self.errors += 1
-        finally:
-            conn.close()
-            if browser is not None:
-                browser.close()
-            self.elapsed_time = clock() - start_time
 
     def _extract_article(self, html):
-        """Removes html boilerplate and extracts article content from html.
-        """
+        """Removes html boilerplate and extracts article content from html."""
         g = Goose()
         article = g.extract(raw_html=html)
         cleaned = article.cleaned_text
@@ -162,7 +178,7 @@ def _init_webdriver():
     fp.set_preference('browser.popups.showPopupBlocker', 'true')
 
     # Install ad block plus
-    fp.add_extension("adblockplusfirefox.xpi")
+    # fp.add_extension("adblockplusfirefox.xpi")
 
     # Set the modified profile while creating the browser object
     return webdriver.Firefox(fp)

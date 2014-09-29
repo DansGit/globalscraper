@@ -7,8 +7,10 @@ import smtplib
 from RSS_Scraper import RSS_Scraper
 import datetime
 import config
+from pyvirtualdisplay import Display
 from tempfile import TemporaryFile
 from subprocess import Popen
+from progressbar import ProgressBar
 
 def init_selenium():
     p = Popen(['java', '-jar', 'selenium-server-standalone-2.43.1.jar'],
@@ -30,9 +32,9 @@ def chunk(l, n):
 
 
 
-def worker(scrapers):
+def worker(scrapers, pbar):
     for scraper in scrapers:
-        scraper.scrape()
+        scraper.scrape(pbar)
 
 
 def email(msg):
@@ -55,6 +57,8 @@ def format_time(seconds):
 
 def main(num_threads, limit=None):
     start_time = clock()
+    display = Display(visible=0, size=(800, 600))
+    display.start()
     logging.basicConfig(filename='globalscraper.log',
             filemode='w',
             level=logging.INFO)
@@ -74,19 +78,36 @@ def main(num_threads, limit=None):
                     )
             scrapers.append(scraper)
 
+    # Parse RSS feeds
+    pbar1 = ProgressBar(len(scrapers))
+    print "Parsing RSS feeds..."
+    pbar1.start()
+    for scraper in scrapers:
+        result = scraper.rss_parse()
+        if not result:
+            scrapers.remove(scraper)
+        pbar1.tick()
+
     jobs = []
     scrapers = scrapers[:limit]
+    num_articles = sum([len(x.jobs) for x in scrapers])
+    pbar2 = ProgressBar(num_articles)
+    pbar2.start()
 
     # Let's start scraping!
     # This loop will run num_threads times
     for scraper_set in chunk(scrapers, num_threads):
-        t = threading.Thread(target=worker, args=(scraper_set,))
+        t = threading.Thread(target=worker, args=(scraper_set, pbar2))
         t.start()
         jobs.append(t)
 
     # Wait for all jobs to finish
     for job in jobs:
         job.join()
+
+    # Stop display
+    # Todo put this is in a try finally block.
+    display.stop()
 
     # Send email with statistics
     print "Sending email."
