@@ -82,14 +82,15 @@ def main(num_threads, limit=None):
     pbar1 = ProgressBar(len(scrapers))
     print "Parsing RSS feeds..."
     pbar1.start()
+    scrapers2 = []
     for scraper in scrapers:
         result = scraper.rss_parse()
-        if not result:
-            scrapers.remove(scraper)
+        if result:
+            scrapers2.append(scraper)
         pbar1.tick()
 
     jobs = []
-    scrapers = scrapers[:limit]
+    scrapers2 = scrapers2[:limit]
     num_articles = sum([len(x.jobs) for x in scrapers])
     print "Scraping articles..."
     pbar2 = ProgressBar(num_articles)
@@ -97,7 +98,7 @@ def main(num_threads, limit=None):
 
     # Let's start scraping!
     # This loop will run num_threads times
-    for scraper_set in chunk(scrapers, num_threads):
+    for scraper_set in chunk(scrapers2, num_threads):
         t = threading.Thread(target=worker, args=(scraper_set, pbar2))
         t.start()
         jobs.append(t)
