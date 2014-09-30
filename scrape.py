@@ -77,8 +77,6 @@ def main(num_threads, limit=None):
     # Make sure we have a DB with the correct table.
     initdb(config.dbpath)
     start_time = clock()
-    display = Display(visible=0, size=(800, 600))
-    display.start()
     logging.basicConfig(filename='globalscraper.log',
             filemode='w',
             level=logging.WARNING)
@@ -115,31 +113,31 @@ def main(num_threads, limit=None):
     pbar2 = ProgressBar(num_articles)
     pbar2.start()
 
-    # Let's start scraping!
-    # This loop will run num_threads times
-    for scraper_set in chunk(scrapers2, num_threads):
-        t = threading.Thread(target=worker, args=(scraper_set, pbar2))
-        t.start()
-        jobs.append(t)
+    # Start display
+    display = Display(visible=0, size=(800, 600))
+    display.start()
 
-    # Wait for all jobs to finish
-    for job in jobs:
-        job.join()
+    try:
+        # Let's start scraping!
+        # This loop will run num_threads times
+        for scraper_set in chunk(scrapers2, num_threads):
+            t = threading.Thread(target=worker, args=(scraper_set, pbar2))
+            t.start()
+            jobs.append(t)
 
-    # Stop display
-    # Todo put this is in a try finally block.
-    display.stop()
+        # Wait for all jobs to finish
+        for job in jobs:
+            job.join()
+    finally:
+        display.stop()
 
     # Send email with statistics
     print "Sending email."
     total_time = clock() - start_time
-    avg_time = sum([x.elapsed_time for x in scrapers]) / len(scrapers)
-    num_articles = sum([x.total for x in scrapers])
     errors = sum([x.errors for x in scrapers])
 
     msg = "Finished scraping.\n" + \
             "Total time: {}\n".format(format_time(total_time)) + \
-            "Average time per scraper: {}\n".format(format_time(avg_time)) + \
             "Number of article extracted: {}\n".format(num_articles) + \
             "Number of errors: {}".format(errors)
 
