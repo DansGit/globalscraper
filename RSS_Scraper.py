@@ -157,10 +157,10 @@ def _most_recent_date(conn, publication):
 
 def _save_article(conn, content, pub_date, headline, publication):
     """Saves article to database."""
-    query = """INSERT INTO {table}
+    query = """INSERT INTO articles
     (content, pub_date, headline, publication)
     VALUES (?, ?, ?, ?);
-    """.format(table=publication)
+    """
     params = (content, pub_date, headline, publication)
     conn.execute(query, params)
     conn.commit()
