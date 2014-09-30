@@ -122,6 +122,7 @@ def main(num_threads, limit=None):
         # This loop will run num_threads times
         for scraper_set in chunk(scrapers2, num_threads):
             t = threading.Thread(target=worker, args=(scraper_set, pbar2))
+            t.daemon = True
             t.start()
             jobs.append(t)
 
