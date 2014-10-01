@@ -53,8 +53,8 @@ def dbworker(queue, pbar):
         result = queue.get()
         if type(result) is dict:
             save_article(conn, result)
-        pbar.tick()
         queue.task_done()
+        pbar.tick()
     conn.close()
 
 
@@ -141,7 +141,7 @@ def main(num_threads, limit=None):
 
     jobs = []
     scrapers2 = scrapers2[:limit]
-    num_articles = sum([len(x.jobs) for x in scrapers])
+    num_articles = sum([len(x.jobs) for x in scrapers2])
     print "Scraping articles..."
     pbar2 = ProgressBar(num_articles)
 
