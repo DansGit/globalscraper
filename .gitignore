@@ -8,5 +8,5 @@
 *.xpi
 config.py
 globalscraper.log
-globalscraper.db
+articles.db
 venv

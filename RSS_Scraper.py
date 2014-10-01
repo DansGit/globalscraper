@@ -19,7 +19,7 @@ class RSS_Scraper(object):
 
 
 
-    def scrape(self, pbar, wait=10):
+    def scrape(self, queue, wait=10):
         """Scrapes each new webpage in rss feed."""
         self.logger.info("Scraping rss feed: {}".format(self.rss))
         conn = sqlite3.connect(config.dbpath)
@@ -27,6 +27,7 @@ class RSS_Scraper(object):
 
         for entry in self.jobs:
             url = entry['url']
+            result = None
             try:
                 # Download webpage with requests
                 self.logger.info('Getting "{}" from "{}"'.format(url,
@@ -55,11 +56,14 @@ class RSS_Scraper(object):
                     raise ParseError('Unable to extract content from ' + \
                             '"{}" in "{}"'.format(url, self.publication))
 
-                # Save results
-                self.logger.info('Saving results of "{}" from "{}"'.format(
-                    url, self.publication))
-                _save_article(conn, content, entry['pub_date'], entry['title'],
-                        self.publication)
+                # Generate result
+                result = {
+                        'content': content,
+                        'url': url,
+                        'pub_date': entry['pub_date'],
+                        'headline': entry['title'],
+                        'publication': self.publication
+                        }
             except ParseError as e:
                 self.logger.error(str(e))
                 self.errors += 1
@@ -69,7 +73,8 @@ class RSS_Scraper(object):
                         exc_info=True)
                 self.errors += 1
             finally:
-                pbar.tick()
+                # Put result in queue where it will be saved.
+                queue.put(result)
         conn.close()
 
 

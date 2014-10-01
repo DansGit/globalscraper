@@ -11,6 +11,7 @@ class ProgressBar(object):
         self.start_time = None
         self.width = width
         self.mark = mark
+        self.finished = False
 
         # Float from 0 to 1.
         # Larger means narrower
@@ -58,6 +59,7 @@ class ProgressBar(object):
                 total=self.total
                 ))
         if self.ticks == self.total:
+            self.finished = True
             sys.stdout.write('\nTotal time: {}\n'.format(
                 format_time(time.time() - self.start_time)))
         sys.stdout.flush()

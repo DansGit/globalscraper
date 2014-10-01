@@ -3,6 +3,7 @@ import sys
 import csv
 from time import clock
 import threading
+import Queue
 import smtplib
 from RSS_Scraper import RSS_Scraper
 import datetime
@@ -34,10 +35,37 @@ def chunk(l, n):
     return result
 
 
+def rssworker(scraper, scrapers, pbar):
+    result = scraper.rss_parse()
+    if result:
+        scrapers.append(scraper)
+    pbar.tick()
 
-def worker(scrapers, pbar):
+def scrapeworker(scrapers, queue):
     for scraper in scrapers:
-        scraper.scrape(pbar)
+        scraper.scrape(queue)
+
+
+def dbworker(queue, pbar):
+    conn = sqlite3.connect(config.dbpath)
+    pbar.start()
+    while not pbar.finished:
+        result = queue.get()
+        if type(result) is dict:
+            save_article(conn, result)
+        pbar.tick()
+        queue.task_done()
+    conn.close()
+
+
+def save_article(conn, article_dict):
+    """Saves article to database."""
+    query = """INSERT INTO articles
+    (content, pub_date, headline, publication, url)
+    VALUES (:content, :pub_date, :headline, :publication, :url);
+    """
+    conn.execute(query, article_dict)
+    conn.commit()
 
 
 def email(msg):
@@ -65,7 +93,8 @@ def initdb(dbpath):
         content TEXT,
         pub_date VARCHAR(100),
         headline VARCHAR(250),
-        publication VARCHAR(100)
+        publication VARCHAR(100),
+        url VARCHAR VARCHAR(250)
     );
     """
     conn.execute(query)
@@ -75,7 +104,6 @@ def initdb(dbpath):
 
 def main(num_threads, limit=None):
     # Make sure we have a DB with the correct table.
-    initdb(config.dbpath)
     start_time = clock()
     logging.basicConfig(filename='globalscraper.log',
             filemode='w',
@@ -96,32 +124,42 @@ def main(num_threads, limit=None):
             scrapers.append(scraper)
 
     # Parse RSS feeds
+    initdb(config.dbpath)
     pbar1 = ProgressBar(len(scrapers))
     print "Parsing RSS feeds..."
     pbar1.start()
     scrapers2 = []
+    jobs = []
     for scraper in scrapers:
-        result = scraper.rss_parse()
-        if result:
-            scrapers2.append(scraper)
-        pbar1.tick()
+        t = threading.Thread(target=rssworker, args=(scraper, scrapers2, pbar1))
+        t.daemon = True
+        t.start()
+        jobs.append(t)
+    for thread in jobs:
+        thread.join()
+
 
     jobs = []
     scrapers2 = scrapers2[:limit]
     num_articles = sum([len(x.jobs) for x in scrapers])
     print "Scraping articles..."
     pbar2 = ProgressBar(num_articles)
-    pbar2.start()
 
     # Start display
     display = Display(visible=0, size=(800, 600))
     display.start()
 
+    # Start the database thread
+    queue = Queue.Queue()
+    dbthread = threading.Thread(target=dbworker, args=(queue, pbar2))
+    dbthread.daemon = True
+    dbthread.start()
+
     try:
         # Let's start scraping!
         # This loop will run num_threads times
         for scraper_set in chunk(scrapers2, num_threads):
-            t = threading.Thread(target=worker, args=(scraper_set, pbar2))
+            t = threading.Thread(target=scrapeworker, args=(scraper_set, queue))
             t.daemon = True
             t.start()
             jobs.append(t)
@@ -129,8 +167,19 @@ def main(num_threads, limit=None):
         # Wait for all jobs to finish
         for job in jobs:
             job.join()
+
+        # Stop database thread
+        queue.join()
+    except KeyboardInterrupt:
+        # Ctrl-c recieved. Sending kill to threads.
+        print "this is a thing that happened."
+        for thread in jobs:
+            thread.kill_recieved = True
+        dbthread.kill_recieved = True
     finally:
         display.stop()
+
+
 
     # Send email with statistics
     print "Sending email."
@@ -152,6 +201,8 @@ if __name__ == '__main__':
 
     try:
         main(threads)
+    except KeyboardInterrupt:
+        print "hi :)"
     finally:
         popen.terminate()
 
