@@ -170,12 +170,6 @@ def main(num_threads, limit=None):
 
         # Stop database thread
         queue.join()
-    except KeyboardInterrupt:
-        # Ctrl-c recieved. Sending kill to threads.
-        print "this is a thing that happened."
-        for thread in jobs:
-            thread.kill_recieved = True
-        dbthread.kill_recieved = True
     finally:
         display.stop()
 
